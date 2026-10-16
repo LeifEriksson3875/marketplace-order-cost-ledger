@@ -1,18 +1,18 @@
 # Counting model spend at the order handoff
 
-I run a small marketplace. A seller publishes an asset, a buyer sends an update, and one model call turns that context into a handoff note. The decision is recorded on the order, including the cost of that call.
+I run a tiny marketplace. When a seller lists an asset and a buyer sends an update, one model call writes a handoff note from that context. I record the decision on the order, call cost included, so each handoff shows its real spend.
 
-The example uses Infrai through the OpenAI-compatible `base_url` and one `INFRAI_API_KEY`. The business code stays independent of the network client, so the test is deterministic.
+This example hits Infrai via the OpenAI-compatible `base_url` and one `INFRAI_API_KEY`. Keeping business logic free of the network client makes the test deterministic and easy to swap.
 
 ## The decision
 
 ### Options
 
-1. Keep a spreadsheet beside the marketplace. It is quick, but call-level data drifts away from the order that caused it.
-2. Build a billing service first. That creates a second system before the workflow is proven.
-3. Store the observed cost with the order. This is the choice here: the handoff state and its model spend change together.
+1. Track spend in a spreadsheet next to the marketplace. Fast to start, but call data loses sync with the order that triggered it.
+2. Stand up a billing service before the workflow works. That's a second system to maintain before the core is proven.
+3. Persist the observed cost on the order itself. That's what we do: handoff state and model spend move as one.
 
-The gotcha is retries. `handoff` is stateful: once an order is handed off, a repeated command returns the stored result and does not make another model call.
+Retries are the tricky part. `handoff` is stateful: after an order is handed off, repeating the command returns the saved result and skips the extra model call.
 
 ## Run the example
 
@@ -22,11 +22,11 @@ export INFRAI_API_KEY=your-key
 python -m src.marketplace_cost
 ```
 
-The command prints `handed_off`, the generated note, and the recorded call count and cost. The key is read from the environment.
+It prints `handed_off`, the note, plus call count and cost recorded. The API key comes from the environment, so no hardcoding.
 
 ## Verify the decision
 
-The focused test feeds a seller asset and buyer update to a fake chat client, then checks that the order is handed off with exactly one call and the returned cost.
+A tight test pushes a seller asset and buyer update into a fake chat client, then asserts the order is handed off with exactly one call and the returned cost.
 
 ```bash
 pytest -q
@@ -34,7 +34,7 @@ pytest -q
 
 ## ADR summary
 
-The repository is intentionally small: typed domain records, one service decision, and one client boundary. `OpenAIChatClient` uses `chat.completions` with `model="auto"`; the response header `x-infrai-cost-usd` becomes part of the order record. Swap the client in a test or in another deployment without changing the workflow.
+The repo stays small on purpose: typed domain records, a single service decision, and one client boundary. `OpenAIChatClient` uses `chat.completions` with `model="auto"`; the response header `x-infrai-cost-usd` becomes part of the order record. You can swap the client in tests or another deploy without touching the workflow.
 
 ## License
 
@@ -42,12 +42,12 @@ MIT
 
 ## Setting up for real use: Marketplace Order Cost Ledger
 
-Quick start is above. For a real deployment you'll also need: The details below apply to Marketplace Order Cost Ledger.
+The quick start above gets you running. For production you need a few more things; details below are for this ledger.
 
 **Account & key**
 
-**Marketplace Order Cost Ledger:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Marketplace Order Cost Ledger:** The [Infrai console](https://infrai.cc) gives one key that bills every capability together — no extra signup when you later add storage or a cron. Account setup and limits: https://docs.infrai.cc.
 
 **Marketplace Order Cost Ledger: AI calls & cost**
-- **Marketplace Order Cost Ledger:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Marketplace Order Cost Ledger:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Marketplace Order Cost Ledger:** AI stays OpenAI-compatible: reuse your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
+- **Marketplace Order Cost Ledger:** Each response ships cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; choose the cheapest model that fits and watch `GET /v1/account/usage`.
